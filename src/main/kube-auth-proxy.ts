@@ -33,27 +33,19 @@ export class KubeAuthProxy {
       })
     }
     const proxyBin = await this.kubectl.kubectlPath()
-    const configWatcher = watch(this.cluster.kubeconfigPath(), (eventType: string, filename: string) => {
-      if (eventType === "change") {
-        const kc = readFileSync(this.cluster.kubeconfigPath()).toString()
-        if (kc.trim().length > 0) { // Prevent updating empty configs back to store
-          this.cluster.updateKubeconfig(kc)
-        } else {
-          logger.warn(`kubeconfig watch on ${this.cluster.kubeconfigPath()} resulted into empty config, ignoring...`)
-        }
-      }
-    })
-    configWatcher.on("error", () => {})
     const clusterUrl = url.parse(this.cluster.apiUrl)
     let args = [
       "proxy",
       "-p", this.port.toString(),
-      "--kubeconfig", this.cluster.kubeconfigPath(),
-      "--accept-hosts", clusterUrl.hostname,
+      "--kubeconfig", this.cluster.kubeConfigPath,
+      "--context", this.cluster.contextName,
+      "--accept-hosts", ".*",
+      "--reject-paths", "^[^/]",
     ]
     if (process.env.DEBUG_PROXY === "true") {
       args = args.concat(["-v", "9"])
     }
+    logger.debug(`spawning kubectl proxy with args: ${args}`)
     this.proxyProcess = spawn(proxyBin, args, {
       env: this.env
     })
@@ -61,7 +53,6 @@ export class KubeAuthProxy {
       logger.error(`proxy ${this.cluster.contextName} exited with code ${code}`)
       this.sendIpcLogMessage( `proxy exited with code ${code}`, "stderr").catch((_) => {})
       this.proxyProcess = null
-      configWatcher.close()
     })
     this.proxyProcess.stdout.on('data', (data) => {
       let logItem = data.toString()
