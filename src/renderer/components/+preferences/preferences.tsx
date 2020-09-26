@@ -17,13 +17,22 @@ import { themeStore } from "../../theme.store";
 import { history } from "../../navigation";
 import { Tooltip } from "../tooltip";
 import { KubectlBinaries } from "./kubectl-binaries";
+import { SubTitle } from '../layout/sub-title';
+import { Button } from "../Button";
+import { DECCManager } from "../../../main/decc-manager"
 
 @observer
 export class Preferences extends React.Component {
+  @observable.ref error: React.ReactNode;
+
   @observable helmLoading = false;
   @observable helmRepos: HelmRepo[] = [];
   @observable helmAddedRepos = observable.map<string, HelmRepo>();
   @observable httpProxy = userStore.preferences.httpsProxy || "";
+  @observable deccUrl = userStore.preferences.decc.url || ""; 
+  @observable deccUsername = userStore.preferences.decc.username || "";
+  @observable deccPassword = userStore.preferences.decc.password || "";
+  @observable isWaiting = false;
 
   @computed get themeOptions(): SelectOption<string>[] {
     return themeStore.themes.map(theme => ({
@@ -112,6 +121,28 @@ export class Preferences extends React.Component {
     )
   }
 
+  async importClusters() {
+    try {
+      // this.isWaiting = true;
+      //if (this.deccUsername === '' || this.deccPassword === '' || this.deccUrl === '') {
+      //  Notifications.error(<Trans>All DECC details needs to be set</Trans>);
+      //  return;
+      //}
+      let deccManager = new DECCManager();
+      
+      deccManager.createDECCLensEnv()
+      .then(function(result) {
+        Notifications.info(<Trans>Button to import clusters clicked</Trans>);
+        console.log(`Button to import clusters clicked. Result: ${result}`);
+        return
+      });
+    } catch (err) {
+      Notifications.error(<Trans>Error while adding cluster(s): {String(err)}</Trans>);
+    } finally {
+      // this.isWaiting = false;
+    }
+  }
+
   render() {
     const { preferences } = userStore;
     const header = (
@@ -123,6 +154,40 @@ export class Preferences extends React.Component {
     return (
       <div className="Preferences">
         <WizardLayout header={header} centered>
+          <h2><Trans>Docker Enterprise Container Cloud</Trans></h2>
+          <SubTitle title="Username" />
+          <Input
+            theme="round-black"
+            placeholder={_i18n._(t`Type Docker Enterprise Container Cloud Username`)}
+            value={this.deccUsername}
+            onChange={v => this.deccUsername = v}
+            onBlur={() => preferences.decc.username = this.deccUsername}
+          />
+          <SubTitle title="Password" />
+          <Input
+            theme="round-black"
+            placeholder={_i18n._(t`Type Docker Enterprise Container Cloud Password`)}
+            value={this.deccPassword}
+            onChange={v => this.deccPassword = v}
+            onBlur={() => preferences.decc.password = this.deccPassword}
+          />
+          <SubTitle title="Docker Enterprise Container Cloud Manager URL" />
+          <Input
+            theme="round-black"
+            placeholder={_i18n._(t`Type Docker Enterprise Container Cloud Manager URL`)}
+            value={this.deccUrl}
+            onChange={v => this.deccUrl = v}
+            onBlur={() => preferences.decc.url = this.deccUrl}
+          />
+          <div className="actions-panel">
+          <Button
+            primary
+            label={<Trans>Import cluster(s)</Trans>}
+            onClick={this.importClusters}
+            //waiting={this.isWaiting}
+          />
+          </div>
+
           <h2><Trans>Color Theme</Trans></h2>
           <Select
             options={this.themeOptions}

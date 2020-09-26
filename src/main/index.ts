@@ -120,12 +120,14 @@ async function main() {
     callback(true);
   });
 
+  logger.info(`Current DECC details are: ${JSON.stringify(userStore.preferences.decc)}`);
+
   //windowManager.showMain(keycloakWinURL);
 }
 
 async function processKCLogin(idToken, refreshToken) {
   logger.info('processKCLogin');
-  
+
   userStore.setTokenDetails(idToken, refreshToken);
   //logger.info('saved id token and refreshToken to userStore');
 
@@ -133,8 +135,9 @@ async function processKCLogin(idToken, refreshToken) {
 
   var parsedToken = userStore.decodeToken (idToken);
   
-  
-  if (process.env.DECC_URL != '') {
+  var deccURL = userStore.preferences.decc.url != '' ? userStore.preferences.decc.url : process.env.DECC_URL
+  logger.info(`Current deccURL is ${deccURL}`);
+  if (deccURL != '' && deccURL != undefined) {
     // create decc manager
     deccManager = new DECCManager(process.env.DECC_URL);
     // setup clusters from DECC
@@ -143,6 +146,7 @@ async function processKCLogin(idToken, refreshToken) {
   
   await clusterStore.load();
   await windowManager.showMain();
+
 }
 
 app.on("ready", main);

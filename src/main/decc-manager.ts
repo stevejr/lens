@@ -23,7 +23,10 @@ const ignoredDECCNamespaces =  [
 ];
 
 export class DECCManager {
-  constructor(protected deccURL: string) {
+  protected deccURL: string;
+
+  constructor(deccURL: string = '') {
+    this.deccURL = userStore.preferences.decc.url != '' ? userStore.preferences.decc.url : deccURL
   }
 
   async getNamespaces(): Promise<[]> {
@@ -55,28 +58,32 @@ export class DECCManager {
   }
 
   async getK8sToken(): Promise<[]> {
-    const headers = {
-      Accept: 'application/json',
-      'Content-Type': 'application/x-www-form-urlencoded'
-    };
+    try {
+      const headers = {
+        Accept: 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded'
+      };
 
-    const res = await customRequestPromise({
-      uri: `http://${process.env.DECC_URL}/auth/realms/iam/protocol/openid-connect/token`,
-      headers: headers,
-      method: 'POST', body: queryString.stringify({
-        grant_type: 'password',
-        response_type: 'id_token',
-        scope: 'openid',
-        client_id: 'k8s',
-        username: `${process.env.DECC_USERNAME}`,
-        password: `${process.env.DECC_PASSWORD}`,
-      }),
-      json: true,
-      resolveWithFullResponse: true,
-      timeout: 10000,
-    });
-    // logger.info(`getTokenForCluster: res - ${JSON.stringify(res)}`);
-    return res.body;
+      const res = await customRequestPromise({
+        uri: `http://${this.deccURL}/auth/realms/iam/protocol/openid-connect/token`,
+        headers: headers,
+        method: 'POST', body: queryString.stringify({
+          grant_type: 'password',
+          response_type: 'id_token',
+          scope: 'openid',
+          client_id: 'k8s',
+          username: `${userStore.preferences.decc.username}`,
+          password: `${userStore.preferences.decc.password}`,
+        }),
+        json: true,
+        resolveWithFullResponse: true,
+        timeout: 10000,
+      });
+      // logger.info(`getTokenForCluster: res - ${JSON.stringify(res)}`);
+      return res.body;
+    } catch (err) {
+      logger.error(`[DECCMANAGER]: getK8sToken error - ${String(err)}`);
+    }
   }
 
   async getDECCNamespaces() {
@@ -97,15 +104,27 @@ export class DECCManager {
     }
   }
 
-  getDECCNamespacesForUser(deccNamespaces, userIAMRoles: string[], username: string) {
+  //getDECCNamespacesForUser(deccNamespaces, userIAMRoles: string[], username: string) {
+  getDECCNamespacesForUser(deccNamespaces, k8sUserIAMRoles: string[], kaasUserIAMRoles: string[], username: string) {
     var deccNamespacesForUser = [];
-    deccNamespaces.forEach(function(ns) {
-      if (userIAMRoles.includes(`m:kaas:${ns}@reader`) || userIAMRoles.includes(`m:kaas:${ns}@writer`)) {
-        // add namespace to workspaceStore if not present
-        //logger.info(`getDECCNamespacesForUser: User ${username} has access to namespace ${ns}`);
-        deccNamespacesForUser.push(ns);
-      }
-    });
+    k8sUserIAMRoles.forEach(role => {
+      deccNamespaces.forEach(ns => {
+        logger.debug(`[DECCMANAGER]: getDECCNamespacesForUser ns:${ns}, role:${role}`);  
+        if (role.startsWith(`m:k8s:${ns}`)) {
+          deccNamespacesForUser.push(ns);
+        }
+      });
+    })
+
+
+    // var deccNamespacesForUser = [];
+    // deccNamespaces.forEach(function(ns) {
+    //   if (userIAMRoles.includes(`m:kaas:${ns}@reader`) || userIAMRoles.includes(`m:kaas:${ns}@writer`)) {
+    //     // add namespace to workspaceStore if not present
+    //     //logger.info(`getDECCNamespacesForUser: User ${username} has access to namespace ${ns}`);
+    //     deccNamespacesForUser.push(ns);
+    //   }
+    // });
     return deccNamespacesForUser;
   }
 
@@ -198,8 +217,8 @@ export class DECCManager {
       clusterStore.addCluster(...newClusters);
      
       let createdCluster = clusterStore.getById(newCluster.id);
-      createdCluster.pushState();
-      clusterStore.load();
+      //createdCluster.pushState();
+      //clusterStore.load();
 
       // clusterStore.setActive(newCluster.id);
       logger.info(`addLensClusterToDECCWorkspace: Created Cluster Name: ${createdCluster.preferences.clusterName}, Cluster UCP Dashboard URL: ${ucpDashboard}`);
@@ -247,10 +266,13 @@ export class DECCManager {
     const wsPrefix = `decc`;
     const ws = workspaceStore.getByName(`${wsPrefix}-${workspace}`);
 
-    if (ws === undefined) { return }
+    if (ws === undefined) { 
+      logger.info(`[DECCMANAGER]: refreshLensDECCClusterKubeconfigs - skipping refresh for workspace ${workspace}`);
+      return 
+    }
 
-    //logger.info(`refreshLensDECCClusterKubeconfigs: Processing Workspace ${JSON.stringify(ws)}`)
     clusterStore.getByWorkspaceId(ws.id).forEach(cluster => {
+      logger.info(`[DECCMANAGER]: refreshLensDECCClusterKubeconfigs: Processing Cluster ${cluster.preferences.clusterName}, Workspace ${JSON.stringify(ws.name)}`)
       const idTokenToUse = cluster.preferences.clusterName === "decc-kaas-mgmt" ? idToken : k8sToken["id_token"]
       const refreshTokenToUse = cluster.preferences.clusterName === "decc-kaas-mgmt" ? refreshToken : k8sToken["refresh_token"]
       const currentKubeConfig = loadConfig(cluster.kubeConfigPath); //readFile(cluster.kubeConfigPath, "utf8");
@@ -273,7 +295,9 @@ export class DECCManager {
       cluster.contextName = `${username}@${currentKubeConfig.clusters[0].name}`;
       ClusterStore.embedCustomKubeConfig(cluster.id, YAML.stringify(jsConfig));
       logger.info(`refreshLensDECCClusterKubeconfigs: Updated Cluster ${cluster.preferences.clusterName} kubeconfig with new token values`);
-      cluster.refresh();
+      //cluster.pushState();
+      //cluster.refresh();
+
     });
   }
 
@@ -286,13 +310,16 @@ export class DECCManager {
 
     // get the token from the k8s client for this user
     const k8sToken = await this.getK8sTokenForUser();
+    // get the token from the k8s client for this user
+    const parsedK8sIdToken = userStore.decodeToken (k8sToken["id_token"]);
+    const k8sUserIAMRoles = parsedK8sIdToken.iam_roles;
 
     // get all available DECC Namespaces
     const deccNamespaces = await this.getDECCNamespaces();
     // logger.info(`createDECCLensEnv: The following namespaces exist in DECC - ${deccNamespaces.toString()}`);
 
     // get all DECC Namespaces the user has access to
-    const userDECCNamespaces: string[] = await this.getDECCNamespacesForUser(deccNamespaces, userIAMRoles, username);
+    const userDECCNamespaces: string[] = await this.getDECCNamespacesForUser(deccNamespaces, k8sUserIAMRoles, userIAMRoles, username);
     if (userDECCNamespaces.length > 0) {
       userDECCNamespaces.sort(); 
       logger.info(`createDECCLensEnv: The following namespaces exist in DECC for User ${username} - ${userDECCNamespaces.toString()}`);

@@ -98,7 +98,7 @@ export class WindowManager {
 
   public async showLogout() {
     try {
-      userStore.saveLastLoggedInUser(userStore.token.preferredUserName);
+      //userStore.saveLastLoggedInUser(userStore.token.preferredUserName);
       await this.mainView.loadURL(`http://localhost:${this.keycloakPort}?logout=true`)
       this.mainView.show();
     } catch (err) {

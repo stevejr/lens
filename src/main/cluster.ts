@@ -230,7 +230,9 @@ export class Cluster implements ClusterModel {
   }
 
   protected async k8sRequest<T = any>(path: string, options: RequestPromiseOptions = {}): Promise<T> {
+    
     const apiUrl = this.kubeProxyUrl + path;
+    logger.info(`[CLUSTER]: k8sRequest - apiUrl is ${apiUrl}, Host Header is ${new URL(this.kubeProxyUrl).host}`);
     return request(apiUrl, {
       json: true,
       timeout: 5000,

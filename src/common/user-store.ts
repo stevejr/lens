@@ -31,6 +31,11 @@ export interface UserPreferences {
   downloadKubectlBinaries?: boolean;
   downloadBinariesPath?: string;
   kubectlBinariesPath?: string;
+  decc?: {
+    username: string,
+    password: string,
+    url: string
+  }
 }
 
 export interface Token {
@@ -106,7 +111,12 @@ export class UserStore extends BaseStore<UserStoreModel> {
     downloadMirror: "default",
     downloadKubectlBinaries: true,  // Download kubectl binaries matching cluster version
     downloadBinariesPath: this.getDefaultKubectlPath(),
-    kubectlBinariesPath: ""
+    kubectlBinariesPath: "",
+    decc: {
+      username: "",
+      password: "",
+      url: "",
+    }
   };
 
   @observable token: Token = {
