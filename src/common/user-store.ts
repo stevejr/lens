@@ -18,8 +18,10 @@ export interface UserStoreModel {
   lastSeenAppVersion: string;
   seenContexts: string[];
   preferences: UserPreferences;
-  token: Token;
+  k8sToken: TokenContents;
+  kaasToken: TokenContents;
   lastLoggedInUser: string;
+  isLoggedIn: boolean;
 }
 
 export interface UserPreferences {
@@ -33,12 +35,12 @@ export interface UserPreferences {
   kubectlBinariesPath?: string;
 }
 
-export interface Token {
+export interface TokenContents {
   preferredUserName?: string,
   token?: string;
   tokenValidTill?: number;
   refreshToken?: string;
-  refreshTokenValidTill?: number;
+  refreshTokenValidTill?: number; 
 }
 
 interface IDToken {
@@ -109,15 +111,24 @@ export class UserStore extends BaseStore<UserStoreModel> {
     kubectlBinariesPath: ""
   };
 
-  @observable token: Token = {
-    token: "",
-    refreshToken: ""
-  }
+  @observable k8sToken = {};
+
+  @observable kaasToken = {};
 
   @observable lastLoggedInUser = "";
 
+  @observable isLoggedIn = false;
+
   get isNewVersion() {
     return semver.gt(getAppVersion(), this.lastSeenAppVersion);
+  }
+
+  get isUserLoggedIn() {
+    return this.isLoggedIn ? true : false;
+  }
+
+  get isUserLoggedOut() {
+    return this.isLoggedIn ? false : true;
   }
 
   @action
@@ -167,8 +178,17 @@ export class UserStore extends BaseStore<UserStoreModel> {
     return path.join((app || remote.app).getPath("userData"), "binaries")
   }
 
-  getTokenDetails(): Token {
-    return this.token;
+  getTokenDetails(clientId: string): TokenContents {
+      logger.info(`[USERSTORE]: getTokenDetails for client id ${clientId}`)
+      
+      if (clientId==="k8s") {
+        logger.debug(`[USERSTORE]: getTokenDetails - token retrieved ${JSON.stringify(this.k8sToken)}`)
+        return this.k8sToken
+      };
+      if (clientId==="kaas") {
+        logger.debug(`[USERSTORE]: getTokenDetails - token retrieved ${JSON.stringify(this.kaasToken)}`)
+        return this.kaasToken
+      }; 
   }
 
   decodeToken(token: string) {
@@ -183,8 +203,8 @@ export class UserStore extends BaseStore<UserStoreModel> {
     }
   }
 
-  getIDTokenIAMPermissions(): string[] {
-    let tokenDecoded = this.decodeToken(this.token.token);
+  getIDTokenIAMPermissions(token: string): string[] {
+    let tokenDecoded = this.decodeToken(token);
     const userRoles = tokenDecoded.iam_roles || [];
     return userRoles
   }
@@ -192,8 +212,8 @@ export class UserStore extends BaseStore<UserStoreModel> {
   isTokenExpired(validTill: number): boolean {
     // Create a current UnixTime style date in ms
     const timeNow = Math.round(Date.now());
-    console.log(`isTokenExpired: timeNow: ${new Date(timeNow).toString()}`);
-    console.log(`isTokenExpired: validTill: ${new Date(validTill).toString()}`);
+    logger.info(`[USERSTORE]: isTokenExpired: timeNow: ${new Date(timeNow).toString()}`);
+    logger.info(`[USERSTORE]: isTokenExpired: validTill: ${new Date(validTill).toString()}`);
     //if ((new Date(validTill).getMinutes() - new Date().getMinutes()) / 1000 / 60 < 0) {
     if (timeNow > validTill) {
       return true;
@@ -202,43 +222,60 @@ export class UserStore extends BaseStore<UserStoreModel> {
   }
 
   @action
-  setTokenDetails(token: string, refreshToken: string) {
+  setTokenDetails(token: string, refreshToken: string, clientId: string) {
     
     let tokenDecoded = this.decodeToken(token);
     let refreshTokenDecoded = this.decodeToken(refreshToken);
     
-    this.token.token = token;
-    this.token.refreshToken = refreshToken;
-    this.token.preferredUserName = tokenDecoded.preferred_username;
+    let newToken: TokenContents = {};
+
+    newToken.token = token;
+    newToken.refreshToken = refreshToken;
+    newToken.preferredUserName = tokenDecoded.preferred_username;
 
     // Create a current UnixTime style date in secs
-    this.token.tokenValidTill = tokenDecoded.exp * 1000; 
-    this.token.refreshTokenValidTill = refreshTokenDecoded.exp * 1000;
+    newToken.tokenValidTill = tokenDecoded.exp * 1000; 
+    newToken.refreshTokenValidTill = refreshTokenDecoded.exp * 1000;
 
-    console.info('The saved token object is: ' + JSON.stringify(this.token));
+    logger.debug(`[USERSTORE]: setTokenDetails - The saved token object for client id ${clientId} is: ${JSON.stringify(newToken)}`);
     const tokenSavedAt = new Date();
-    console.log(`keycloak token retrieved at: ${tokenSavedAt.toLocaleTimeString()}`);
-
-    console.info('Check if token date is expired: ' + this.isTokenExpired(this.token.tokenValidTill));
+    logger.debug(`[USERSTORE]: setTokenDetails - Token retrieved at: ${tokenSavedAt.toLocaleTimeString()}`);
+    logger.debug(`[USERSTORE]: setTokenDetails - Check if token date is expired: ${this.isTokenExpired(newToken.tokenValidTill)}`);
+    if (clientId==="k8s") {this.k8sToken = newToken};
+    if (clientId==="kaas") {this.kaasToken = newToken}; 
   }
 
   @action
-  saveLastLoggedInUser(user: string) {
-    this.lastLoggedInUser = user;
+  saveLoggedInUser(username: string) {
+    this.isLoggedIn = true;
+    this.lastLoggedInUser = username;
+    logger.info(`[USERSTORE]: setting isLoggedIn to true`);
+  }
+  
+  @action
+  saveLastLoggedInUser() {
+    this.isLoggedIn = false;
+    logger.info(`[USERSTORE]: setting isLoggedIn to false}`);
   }
 
   @action
   protected async fromStore(data: Partial<UserStoreModel> = {}) {
-    const { lastSeenAppVersion, seenContexts = [], preferences, kubeConfigPath, token } = data
-    if (lastSeenAppVersion) {
-      this.lastSeenAppVersion = lastSeenAppVersion;
+    try {
+      const { lastSeenAppVersion, seenContexts = [], preferences, kubeConfigPath, k8sToken, kaasToken, isLoggedIn } = data
+      if (lastSeenAppVersion) {
+        this.lastSeenAppVersion = lastSeenAppVersion;
+      }
+      if (kubeConfigPath) {
+        this.kubeConfigPath = kubeConfigPath;
+      }
+      this.seenContexts.replace(seenContexts);
+      Object.assign(this.preferences, preferences);
+      Object.assign(this.kaasToken, kaasToken);
+      Object.assign(this.k8sToken, k8sToken);
+      this.isLoggedIn = isLoggedIn;
+    } catch (err) {
+      logger.error(`[USERSTORE]: fromStore - Error caught - ${String(err)}`)
     }
-    if (kubeConfigPath) {
-      this.kubeConfigPath = kubeConfigPath;
-    }
-    this.seenContexts.replace(seenContexts);
-    Object.assign(this.preferences, preferences);
-    Object.assign(this.token, token);
   }
 
   toJSON(): UserStoreModel {
@@ -247,8 +284,10 @@ export class UserStore extends BaseStore<UserStoreModel> {
       lastSeenAppVersion: this.lastSeenAppVersion,
       seenContexts: Array.from(this.seenContexts),
       preferences: this.preferences,
-      token: this.token,
+      kaasToken: this.kaasToken,
+      k8sToken: this.k8sToken,
       lastLoggedInUser: this.lastLoggedInUser,
+      isLoggedIn: this.isLoggedIn,
     }
     return toJS(model, {
       recurseEverything: true,

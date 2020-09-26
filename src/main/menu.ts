@@ -8,6 +8,8 @@ import { whatsNewURL } from "../renderer/components/+whats-new/whats-new.route";
 import { clusterSettingsURL } from "../renderer/components/+cluster-settings/cluster-settings.route";
 import logger from "./logger";
 import { landingURL } from "../renderer/components/+landing-page/landing-page.route";
+import { deccLoginURL } from "../renderer/components/+decc-login/decc-login.route";
+//import { DECCLogin } from "../renderer/components/+decc-login/decc-login";
 
 const keycloakWinURL = process.env.NODE_ENV === 'development'
 ? `http://localhost:3000/keycloak_index.html`
@@ -133,10 +135,11 @@ export function buildMenu(windowManager: WindowManager) {
       ]),
       { type: 'separator' },
       {
-        label: 'Logout',
+        label: 'Login',
         click() {
           //navigate(keycloakWinURL)
-          windowManager.showLogout()
+          //windowManager.showLogout()
+          navigate(deccLoginURL())
         } 
       }
     ]

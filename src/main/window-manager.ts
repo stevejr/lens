@@ -64,7 +64,8 @@ export class WindowManager {
     });
 
     // load & show app
-    this.showKeycloak();
+    // this.showKeycloak();
+    this.showMain();
     initMenu(this);
   }
 
@@ -96,15 +97,15 @@ export class WindowManager {
     }
   }
 
-  public async showLogout() {
-    try {
-      userStore.saveLastLoggedInUser(userStore.token.preferredUserName);
-      await this.mainView.loadURL(`http://localhost:${this.keycloakPort}?logout=true`)
-      this.mainView.show();
-    } catch (err) {
-      dialog.showErrorBox("ERROR!", err.toString())
-    }
-  }
+  // public async showLogout() {
+  //   try {
+  //     userStore.saveLastLoggedInUser(userStore.token.preferredUserName);
+  //     await this.mainView.loadURL(`http://localhost:${this.keycloakPort}?logout=true`)
+  //     this.mainView.show();
+  //   } catch (err) {
+  //     dialog.showErrorBox("ERROR!", err.toString())
+  //   }
+  // }
 
   public async showMain() {
     try {

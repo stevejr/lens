@@ -11,6 +11,7 @@ import { ErrorBoundary } from "./components/error-boundary";
 import { WhatsNew, whatsNewRoute } from "./components/+whats-new";
 import { Notifications } from "./components/notifications";
 import { ConfirmDialog } from "./components/confirm-dialog";
+import { DECCLogin, deccLoginRoute } from "./components/+decc-login";
 
 @observer
 export class LensApp extends React.Component {
@@ -22,6 +23,7 @@ export class LensApp extends React.Component {
             <Switch>
               {userStore.isNewVersion && <Route component={WhatsNew}/>}
               <Route component={WhatsNew} {...whatsNewRoute}/>
+              <Route component={DECCLogin} {...deccLoginRoute}/>
               <Route component={ClusterManager}/>
             </Switch>
           </ErrorBoundary>

@@ -91,9 +91,13 @@ export class Cluster implements ClusterModel {
   @action
   async init(port: number) {
     try {
+      logger.debug(`[CLUSTER]: init - this.contextHandler`)
       this.contextHandler = new ContextHandler(this);
+      logger.debug(`[CLUSTER]: init - this.kubeconfigManager`)
       this.kubeconfigManager = new KubeconfigManager(this, this.contextHandler, port);
+      logger.debug(`[CLUSTER]: init - this.kubeProxyUrl`)
       this.kubeProxyUrl = `http://localhost:${port}${apiKubePrefix}`;
+      logger.debug(`[CLUSTER]: init - this.initialized`)
       this.initialized = true;
       logger.info(`[CLUSTER]: "${this.contextName}" init success`, {
         id: this.id,

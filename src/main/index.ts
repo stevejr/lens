@@ -26,7 +26,7 @@ import { v4 as uuid } from "uuid";
 import { Cluster } from "../main/cluster";
 import {kubeconfig} from '../common/utils/k8sTemplates';
 import YAML from 'yaml';
-import { DECCManager } from "./decc-manager";
+import { deccManager } from "./decc-manager";
 
 const workingDir = path.join(app.getPath("appData"), appName);
 app.setName(appName);
@@ -37,7 +37,7 @@ if (!process.env.CICD) {
 let windowManager: WindowManager;
 let clusterManager: ClusterManager;
 let proxyServer: LensProxy;
-let deccManager: DECCManager;
+//let deccManager: DECCManager;
 
 mangleProxyEnv()
 if (app.commandLine.getSwitchValue("proxy-server") !== "") {
@@ -74,10 +74,16 @@ async function main() {
     userStore.load(),
     clusterStore.load(),
     workspaceStore.load(),
+    // deccManager.load(),
   ]);
 
   // create cluster manager
   clusterManager = new ClusterManager(proxyPort);
+
+  // set DECC URL
+  // if (process.env.DECC_URL != '') {
+  //   deccManager.setDECCURL(process.env.DECC_URL);
+  // }
 
   // run proxy
   try {
@@ -102,6 +108,8 @@ async function main() {
 
   // create window manager and open app
   windowManager = new WindowManager(proxyPort, 3000);
+
+
   //windowManager = new WindowManager(3000);
 
   //open login page in keyloak renderer
@@ -123,27 +131,29 @@ async function main() {
   //windowManager.showMain(keycloakWinURL);
 }
 
-async function processKCLogin(idToken, refreshToken) {
-  logger.info('processKCLogin');
+// async function processKCLogin(idToken, refreshToken) {
+//   logger.info('processKCLogin');
   
-  userStore.setTokenDetails(idToken, refreshToken);
-  //logger.info('saved id token and refreshToken to userStore');
+//   userStore.setTokenDetails(idToken, refreshToken);
+//   //logger.info('saved id token and refreshToken to userStore');
 
-  //logger.info('the idToken is: ' + userStore.getTokenDetails().token);
+//   //logger.info('the idToken is: ' + userStore.getTokenDetails().token);
 
-  var parsedToken = userStore.decodeToken (idToken);
+//   var parsedToken = userStore.decodeToken (idToken);
   
   
-  if (process.env.DECC_URL != '') {
-    // create decc manager
-    deccManager = new DECCManager(process.env.DECC_URL);
-    // setup clusters from DECC
-    await deccManager.createDECCLensEnv();
-  }
+//   if (process.env.DECC_URL != '') {
+//     // create decc manager
+//     //deccManager = new DECCManager(process.env.DECC_URL);
+//     // setup clusters from DECC
+//     deccManager.setDECCURL(process.env.DECC_URL);
+
+//     await deccManager.createDECCLensEnv();
+//   }
   
-  await clusterStore.load();
-  await windowManager.showMain();
-}
+//   await clusterStore.load();
+//   await windowManager.showMain();
+// }
 
 app.on("ready", main);
 
@@ -151,22 +161,23 @@ app.on("will-quit", async (event) => {
   event.preventDefault(); // To allow mixpanel sending to be executed
   if (proxyServer) proxyServer.close()
   if (clusterManager) clusterManager.stop()
+  userStore.saveLastLoggedInUser()
   app.exit();
 })
 
-ipcMain.on('keycloak-token', (event, idToken, refreshToken) => {
-  processKCLogin(idToken, refreshToken);  
-});
+// ipcMain.on('keycloak-token', (event, idToken, refreshToken) => {
+//   processKCLogin(idToken, refreshToken);  
+// });
 
-ipcMain.on('keycloak-token-update', (event, idToken, refreshToken) => {
-  logger.info('token refresh receivied:' + idToken);
-  if(userStore.isTokenExpired(userStore.token.tokenValidTill)) {
-    userStore.setTokenDetails(idToken, refreshToken);
-    logger.info('saved new id token and refreshToken to userStore');
-    logger.info('the idToken is: ' + userStore.getTokenDetails().token);
-    //deccManager.refreshClusterKubeConfigs();
-  };
-});
+// ipcMain.on('keycloak-token-update', (event, idToken, refreshToken) => {
+//   logger.info('token refresh receivied:' + idToken);
+//   if(userStore.isTokenExpired(userStore.token.tokenValidTill)) {
+//     userStore.setTokenDetails(idToken, refreshToken);
+//     logger.info('saved new id token and refreshToken to userStore');
+//     logger.info('the idToken is: ' + userStore.getTokenDetails().token);
+//     //deccManager.refreshClusterKubeConfigs();
+//   };
+// });
 
 ipcMain.on('keycloak-logout', (event, data) => {
   logger.error('logout');

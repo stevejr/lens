@@ -41,34 +41,46 @@ export class BaseStore<T = any> extends Singleton {
   }
 
   protected async init() {
-    if (this.params.autoLoad) {
-      await this.load();
-    }
-    if (this.params.syncEnabled) {
-      await this.whenLoaded;
-      this.enableSync();
+    try {
+      if (this.params.autoLoad) {
+        await this.load();
+      }
+      if (this.params.syncEnabled) {
+        await this.whenLoaded;
+        this.enableSync();
+      }
+    } catch (err) {
+      logger.error(`[STORE]: Error caught - ${err}`)
     }
   }
 
   async load() {
-    const { autoLoad, syncEnabled, ...confOptions } = this.params;
-    this.storeConfig = new Config({
-      ...confOptions,
-      projectName: "lens",
-      projectVersion: getAppVersion(),
-      cwd: (app || remote.app).getPath("userData"),
-    });
-    logger.info(`[STORE]: LOADED from ${this.storeConfig.path}`);
-    this.fromStore(this.storeConfig.store);
-    this.isLoaded = true;
+    try {
+      const { autoLoad, syncEnabled, ...confOptions } = this.params;
+      this.storeConfig = new Config({
+        ...confOptions,
+        projectName: "lens",
+        projectVersion: getAppVersion(),
+        cwd: (app || remote.app).getPath("userData"),
+      });
+      logger.info(`[STORE]: LOADED from ${this.storeConfig.path}`);
+      this.fromStore(this.storeConfig.store);
+      this.isLoaded = true;
+    } catch (err) {
+      logger.error(`[STORE]: Error caught - ${err}`)
+    }
   }
 
   protected async saveToFile(model: T) {
-    logger.info(`[STORE]: SAVING ${this.name}`);
-    // todo: update when fixed https://github.com/sindresorhus/conf/issues/114
-    Object.entries(model).forEach(([key, value]) => {
-      this.storeConfig.set(key, value);
-    });
+    try {
+      logger.info(`[STORE]: SAVING ${this.name}`);
+      // todo: update when fixed https://github.com/sindresorhus/conf/issues/114
+      Object.entries(model).forEach(([key, value]) => {
+        this.storeConfig.set(key, value);
+      });
+    } catch (err) {
+      logger.error(`[STORE]: Error caught - ${err}`)
+    } 
   }
 
   enableSync() {
@@ -114,43 +126,55 @@ export class BaseStore<T = any> extends Singleton {
   }
 
   protected async onModelChange(model: T) {
-    if (ipcMain) {
-      this.saveToFile(model); // save config file
-      this.syncToWebViews(model); // send update to renderer views
-    }
-    // send "update-request" to main-process
-    if (ipcRenderer) {
-      ipcRenderer.send(this.syncChannel, model);
+    try {
+      if (ipcMain) {
+        this.saveToFile(model); // save config file
+        this.syncToWebViews(model); // send update to renderer views
+      }
+      // send "update-request" to main-process
+      if (ipcRenderer) {
+        ipcRenderer.send(this.syncChannel, model);
+      }
+    } catch (err) {
+      logger.error(`[STORE]: Error caught - ${err}`)
     }
   }
 
   protected async syncToWebViews(model: T) {
-    const msg: IpcBroadcastParams = {
-      channel: this.syncChannel,
-      args: [model],
-    }
-    broadcastIpc(msg); // send to all windows (BrowserWindow, webContents)
-    const frames = await this.getSubFrames();
-    frames.forEach(frameId => {
-      // send to all sub-frames (e.g. cluster-view managed in iframe)
-      broadcastIpc({
-        ...msg,
-        frameId: frameId,
-        frameOnly: true,
+    try {
+      const msg: IpcBroadcastParams = {
+        channel: this.syncChannel,
+        args: [model],
+      }
+      broadcastIpc(msg); // send to all windows (BrowserWindow, webContents)
+      const frames = await this.getSubFrames();
+      frames.forEach(frameId => {
+        // send to all sub-frames (e.g. cluster-view managed in iframe)
+        broadcastIpc({
+          ...msg,
+          frameId: frameId,
+          frameOnly: true,
+        });
       });
-    });
+    } catch (err) {
+      logger.error(`[STORE]: Error caught - ${err}`)
+    }
   }
 
   // todo: refactor?
   protected async getSubFrames(): Promise<number[]> {
-    const subFrames: number[] = [];
-    const { clusterStore } = await import("./cluster-store");
-    clusterStore.clustersList.forEach(cluster => {
-      if (cluster.frameId) {
-        subFrames.push(cluster.frameId)
-      }
-    });
-    return subFrames;
+    try {
+      const subFrames: number[] = [];
+      const { clusterStore } = await import("./cluster-store");
+      clusterStore.clustersList.forEach(cluster => {
+        if (cluster.frameId) {
+          subFrames.push(cluster.frameId)
+        }
+      });
+      return subFrames;
+    } catch (err) {
+      logger.error(`[STORE]: Error caught - ${err}`)
+    }
   }
 
   @action
