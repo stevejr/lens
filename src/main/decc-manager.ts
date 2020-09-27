@@ -16,6 +16,7 @@ import { getNodeWarningConditions, loadConfig, podHasIssues } from "../common/ku
 import { customRequestPromise } from "../common/request";
 import orderBy from "lodash/orderBy";
 import queryString from 'query-string';
+//import { usersManagementRoute } from "src/renderer/components/+user-management";
 
 const ignoredDECCNamespaces =  [
   'kube-system', 'kube-public', 'openstack-provider-system', 'system',
@@ -57,7 +58,7 @@ export class DECCManager {
     return res.body;
   }
 
-  async getK8sToken(): Promise<[]> {
+  async getK8sToken(user: string = '', pw: string = '', clientId: string = 'k8s'): Promise<[]> {
     try {
       const headers = {
         Accept: 'application/json',
@@ -71,9 +72,9 @@ export class DECCManager {
           grant_type: 'password',
           response_type: 'id_token',
           scope: 'openid',
-          client_id: 'k8s',
-          username: `${userStore.preferences.decc.username}`,
-          password: `${userStore.preferences.decc.password}`,
+          client_id: clientId,
+          username: user,
+          password: pw,
         }),
         json: true,
         resolveWithFullResponse: true,
@@ -144,9 +145,9 @@ export class DECCManager {
     }
   }
 
-  async getK8sTokenForUser() {
+  async getK8sTokenForUser(user: string, pw: string, clientId: string = 'k8s') {
     try {
-      const res = await this.getK8sToken();
+      const res = await this.getK8sToken(user, pw, clientId);
       return res;
     } catch(err) {
       logger.error(`getK8sTokenForUser: ${String(err)}`);
@@ -302,6 +303,12 @@ export class DECCManager {
   }
 
   async createDECCLensEnv() {
+    logger.info(`[DECCMANAGER]: createDECCLensEnv - userStore.token is ${JSON.stringify(userStore.token)} `);
+    if (userStore.token.token.length === 0 || userStore.token.token === undefined) {
+      let userKaasToken = await this.getK8sTokenForUser(userStore.preferences.decc.username, userStore.preferences.decc.password, 'kaas');
+      logger.info(`createDECCLensEnv: userKaasToken is - ${JSON.stringify(userKaasToken)}`);
+      userStore.setTokenDetails(userKaasToken["id_token"], userKaasToken["refresh_token"]); 
+    }
     const idToken = userStore.token.token; 
     const parsedIdToken = userStore.decodeToken (userStore.token.token);
     const refreshToken = userStore.token.refreshToken;
@@ -309,7 +316,7 @@ export class DECCManager {
     const userIAMRoles = parsedIdToken.iam_roles;
 
     // get the token from the k8s client for this user
-    const k8sToken = await this.getK8sTokenForUser();
+    const k8sToken = await this.getK8sTokenForUser(userStore.preferences.decc.username, userStore.preferences.decc.password);
     // get the token from the k8s client for this user
     const parsedK8sIdToken = userStore.decodeToken (k8sToken["id_token"]);
     const k8sUserIAMRoles = parsedK8sIdToken.iam_roles;

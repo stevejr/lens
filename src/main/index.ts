@@ -96,12 +96,19 @@ async function main() {
     readSream.pipe(res);
   }).listen(3000);
 
+    //start renderer with keycloak login page
+    const deccServer = http.createServer(function(req: http.IncomingMessage, res: http.ServerResponse) {
+      res.writeHead(200, {"Content-Type": "text/html"});  
+      var readSream = fs.createReadStream(__static + '/decc_login.html','utf8')
+      readSream.pipe(res);
+    }).listen(3001);
+
   // create cluster manager
   //deccManager = new DECCManager(keycloakServer, 'a09bfce9ea3074e25b8e5e7b1df576fd-1162277427.eu-west-2.elb.amazonaws.com');
 
 
   // create window manager and open app
-  windowManager = new WindowManager(proxyPort, 3000);
+  windowManager = new WindowManager(proxyPort, 3001);
   //windowManager = new WindowManager(3000);
 
   //open login page in keyloak renderer
@@ -125,27 +132,59 @@ async function main() {
   //windowManager.showMain(keycloakWinURL);
 }
 
+async function processLogin(username: string, password: string, deccManagerUrl: string) {
+  logger.info('processLogin');
+  try {
+    userStore.preferences.decc.username = username;
+    userStore.preferences.decc.password = password;
+    userStore.preferences.decc.url = deccManagerUrl;
+    
+    var deccURL = userStore.preferences.decc.url != '' ? userStore.preferences.decc.url : process.env.DECC_URL
+    logger.info(`processLogin: Current deccURL is ${deccURL}`);
+    if (deccURL != '' && deccURL != undefined) {
+      // create decc manager
+      deccManager = new DECCManager(deccURL);
+       
+      let userKaasToken = await deccManager.getK8sTokenForUser(username, password, 'kaas');
+      logger.info(`processLogin: userKaasToken is - ${JSON.stringify(userKaasToken)}`);
+      userStore.setTokenDetails(userKaasToken["id_token"], userKaasToken["refresh_token"]); 
+      // setup clusters from DECC
+      await deccManager.createDECCLensEnv();
+    }
+
+    await clusterStore.load();
+    await windowManager.showMain();
+
+  } catch (err) {
+    logger.error(`processLogin: Error - ${String(err)}`);
+  }
+}
+
 async function processKCLogin(idToken, refreshToken) {
   logger.info('processKCLogin');
 
-  userStore.setTokenDetails(idToken, refreshToken);
-  //logger.info('saved id token and refreshToken to userStore');
+  try {
+    userStore.setTokenDetails(idToken, refreshToken);
+    //logger.info('saved id token and refreshToken to userStore');
 
-  //logger.info('the idToken is: ' + userStore.getTokenDetails().token);
+    //logger.info('the idToken is: ' + userStore.getTokenDetails().token);
 
-  var parsedToken = userStore.decodeToken (idToken);
-  
-  var deccURL = userStore.preferences.decc.url != '' ? userStore.preferences.decc.url : process.env.DECC_URL
-  logger.info(`Current deccURL is ${deccURL}`);
-  if (deccURL != '' && deccURL != undefined) {
-    // create decc manager
-    deccManager = new DECCManager(process.env.DECC_URL);
-    // setup clusters from DECC
-    await deccManager.createDECCLensEnv();
+    var parsedToken = userStore.decodeToken (idToken);
+    
+    var deccURL = userStore.preferences.decc.url != '' ? userStore.preferences.decc.url : process.env.DECC_URL
+    logger.info(`Current deccURL is ${deccURL}`);
+    if (deccURL != '' && deccURL != undefined) {
+      // create decc manager
+      deccManager = new DECCManager(deccURL);
+      // setup clusters from DECC
+      await deccManager.createDECCLensEnv();
+    }
+    
+    await clusterStore.load();
+    await windowManager.showMain();
+  } catch (err) {
+    logger.error(`processKCLogin: Error - ${String(err)}`);
   }
-  
-  await clusterStore.load();
-  await windowManager.showMain();
 
 }
 
@@ -157,6 +196,10 @@ app.on("will-quit", async (event) => {
   if (clusterManager) clusterManager.stop()
   app.exit();
 })
+
+ipcMain.on('decc-login', (event, username, password, deccManagerUrl) => {
+  processLogin(username, password,deccManagerUrl );  
+});
 
 ipcMain.on('keycloak-token', (event, idToken, refreshToken) => {
   processKCLogin(idToken, refreshToken);  

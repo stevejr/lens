@@ -132,7 +132,7 @@ export class Preferences extends React.Component {
       
       deccManager.createDECCLensEnv()
       .then(function(result) {
-        Notifications.info(<Trans>Button to import clusters clicked</Trans>);
+        Notifications.info(<Trans>Import clusters has finished</Trans>);
         console.log(`Button to import clusters clicked. Result: ${result}`);
         return
       });
