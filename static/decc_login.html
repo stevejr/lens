@@ -69,7 +69,7 @@ input:focus { box-shadow: inset 0 -5px 45px rgba(100,100,100,0.4), 0 1px 1px rgb
   justify-content: center;
   align-items: center;
 }
-    </style>
+</style>
   <head>
     <meta charset="UTF-8">
     <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
@@ -96,6 +96,16 @@ input:focus { box-shadow: inset 0 -5px 45px rgba(100,100,100,0.4), 0 1px 1px rgb
         const loginForm = document.getElementById("login-form");
         const loginButton = document.getElementById("login-form-submit");
         const loginErrorMsg = document.getElementById("login-error-msg");
+        const deccURLSet = new URL(location.href).searchParams.get('deccURL');
+        const usernameSet = new URL(location.href).searchParams.get('username');
+
+        if (deccURLSet != null) {
+          document.getElementsByName('deccManagerUrl')[0].value=deccURLSet;          
+        }
+
+        if (usernameSet != null) {
+          document.getElementsByName('username')[0].value=usernameSet;          
+        }
 
         loginButton.addEventListener("click", (e) => {
             e.preventDefault();

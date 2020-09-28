@@ -99,7 +99,7 @@ export class WindowManager {
   public async showLogout() {
     try {
 
-      await this.mainView.loadURL(`http://localhost:${this.keycloakPort}?logout=true`)
+      await this.mainView.loadURL(`http://localhost:${this.keycloakPort}?logout=true&deccURL=${userStore.preferences.decc.url}&username=${userStore.preferences.decc.username}`)
       this.mainView.show();
     } catch (err) {
       dialog.showErrorBox("ERROR!", err.toString())
