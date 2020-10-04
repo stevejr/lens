@@ -7,6 +7,9 @@ import logger from "../main/logger";
 
 export const kubeConfigDefaultPath = path.join(os.homedir(), '.kube', 'config');
 
+// new to verify command exists
+const commandExistsSync = require('command-exists').sync;
+
 function resolveTilde(filePath: string) {
   if (filePath[0] === "~" && (filePath[1] === "/" || filePath.length === 1)) {
     return filePath.replace("~", os.homedir());
@@ -139,4 +142,24 @@ export function getNodeWarningConditions(node: V1Node) {
   return node.status.conditions.filter(c =>
     c.status.toLowerCase() === "true" && c.type !== "Ready" && c.type !== "HostUpgrades"
   )
+}
+
+export function validateKubeConfig(config: KubeConfig) {
+  logger.debug(`validateUserConfig: config received - ${JSON.stringify(config)}`);
+  // we only receive a single context, cluster & user object here so lets validate them as this
+  // will be called when we add a new cluster to Lens
+
+  // Validate the User Object
+  const user = config.getCurrentUser();
+  if (user.exec) {
+    const execCommand = user.exec["command"]; 
+    // validate the exec struct in the user object, start with the command field
+    logger.debug(`validateUserConfig: validating user exec command - ${JSON.stringify(execCommand)}`);
+    if (commandExistsSync(execCommand)) {
+      return "OK";
+    } else {
+      logger.debug(`validateUserConfig: exec command ${String(execCommand)} in kubeconfig ${config.currentContext} not found`);
+      return `User Exec command "${execCommand}" not found on host.`;
+    }
+  }
 }
